@@ -14,7 +14,7 @@ const float ADC_REFERENCE_VOLTAGE = 5.0;
 const int SELECTED_VOLTAGE_ADC_PIN = A2;
 
 #define LED_PIN_REV 6
-#define NUM_LEDS_REV 4
+#define NUM_LEDS_REV 23
 Adafruit_NeoPixel strip_rev(NUM_LEDS_REV, LED_PIN_REV, NEO_GRB + NEO_KHZ800);
 
 #define LED_PIN 7
@@ -31,6 +31,7 @@ const int EFFECT_BUTTON_PIN = 4;
 float currentMotorVoltage = 0.0;
 String currentMotorDirection = "STO";
 String currentSelectedVoltage = "Unknown";
+float currentInputVoltage = 0.0; // New variable to store the raw voltage reading from A2
 int manualLEDBrightness = 0;
 bool manualLEDStatus = false;
 
@@ -54,7 +55,7 @@ enum EffectType {
   EFFECT_HALF_BLUE_HALF_RED,
   EFFECT_STROBE,
   EFFECT_BACK_AND_FORTH,
-  EFFECT_BREATHING, // Renamed for clarity, was FADE_IN_OUT
+  EFFECT_BREATHING,
   EFFECT_RANDOM_COLOR_EVERY_2_LEDS,
   EFFECT_THEATER_CHASE,
   EFFECT_TWINKLE
@@ -307,7 +308,6 @@ private:
   }
 
   // --- New Effect Functions ---
-
   void _runTheaterChase(const LEDEffect& effect) {
     unsigned long currentMillis = millis();
     if (currentMillis - _prevMillis >= effect.speedDelay) {
@@ -417,10 +417,10 @@ void loop() {
   currentMotorVoltage = absMotorVoltage;
 
   // --- 2. Indicate Selected Voltage (from switch output) ---
-  float selectedVoltage = readVoltage(SELECTED_VOLTAGE_ADC_PIN);
-  if (selectedVoltage > 18.0) {
+  currentInputVoltage = readVoltage(SELECTED_VOLTAGE_ADC_PIN);
+  if (currentInputVoltage > 18.0) {
     currentSelectedVoltage = "24V";
-  } else if (selectedVoltage > 8.0) {
+  } else if (currentInputVoltage > 8.0) {
     currentSelectedVoltage = "12V";
   } else {
     currentSelectedVoltage = "Unknown";
@@ -519,18 +519,19 @@ void updateLCD() {
       }
       break;
 
-    case 1: // Input Voltage screen
-      // This screen is mostly static, but we'll redraw it completely for consistency.
+    case 1: { // Input Voltage screen - FIXED
       lcd.setCursor(0, 0);
       lcd.print("Input Voltage:  ");
       lcd.setCursor(0, 1);
-      lcd.print("    ");
+      // Now prints the actual voltage reading from A2, then the classification
+      lcd.print(currentInputVoltage, 1);
+      lcd.print("V (");
       lcd.print(currentSelectedVoltage);
-      lcd.print("    ");
+      lcd.print(")  "); // Added spaces for padding
       break;
+    }
 
     case 2: { // LED Effects screen
-      // Update this screen only if content changes or it's the first time on this screen.
       int brightnessPercent = map(analogRead(BRIGHTNESS_POT_PIN), 0, ADC_MAX_READING, 0, 100);
       int currentEffectIndex = ledController.getCurrentEffectIndex();
 
@@ -559,6 +560,7 @@ void updateLCD() {
     case 3: // Uptime screen
       // Only update once per second to prevent flickering.
       if (currentMillis - lastUptimeUpdate >= 1000) {
+        lcd.clear(); // Force clear on this screen too
         lcd.setCursor(0, 0);
         lcd.print("System Uptime:  ");
 
